@@ -1,168 +1,97 @@
-#
-# https://randomnerdtutorials.com/micropython-mqtt-esp32-esp8266/
-#
-import machine
-from machine import Pin
-from machine import I2C 
-import ssd1306
-
-import dht
-import time
 import network
+import time
+from umqtt.simple import MQTTClient
+from machine import Pin
 
-from umqtt.robust import MQTTClient
-
-# import randomint
-
-# Wifi AP
-# WIFI_SSID = 'aron'
-# WIFI_PASS = '00000000'
-
+# WiFi 設定
 WIFI_SSID = 'shepherd'
 WIFI_PASS = 'Good@11255'
 
-
+# MQTT 設定
 MQTT_BROKER = 'broker.hivemq.com'
-
-mqtt_user='pongBot'
-mqtt_password='00000000' # 8 個 0
+mqtt_user = 'pongBot'
+mqtt_password = '00000000'
 client_id = 'pongBot'
+topic_power = b'pongBot/power'
 
+# 狀態變數
+power_status = False
 
-# the TOPICs for publish
-# A bytes array ! ( NOT String object)
-
-topic_power= b'pongBot/power'
-topic_mode= b'pongBot/mode'
-
-
-#######################################################
-# NodeMCU/ESP8266  D0, D1, D2, D3, D4, D5, D6, D7, D8 ]
-#                 [ -1, 5,  4, -1,  2, 14, 12, 13, 15 ]
-#######################################################
-
-
-###
-mqttReady = False
-NTP_DELTA = 8*60*60  # GMT+8
-wifi = network.WLAN(network.STA_IF)
-###
-
-def publishMessage(timerX):
-    if not mqttReady:
-        return
+# 連接 WiFi
+def connect_wifi():
+    print('正在連接 WiFi...')
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
     
-    tm = time.localtime(time.time() + NTP_DELTA) # (year, month, month-day, hour, min, second, weekday, year-day)
+    if not wlan.isconnected():
+        wlan.connect(WIFI_SSID, WIFI_PASS)
+        while not wlan.isconnected():
+            time.sleep(1)
+            print('.', end='')
     
-    power_on = 1
-    power_off = 0
+    print('\nWiFi 連接成功！')
+    print('IP 地址:', wlan.ifconfig()[0])
+    return wlan
 
-    global mqttClient
-    mqttClient.publish(topic_power, str(power_on))
-    # mqttClient.publish(topic_mode, str(tempH))
-
-
-# Action as Wifi Station Mode (Client)
-
-print("Connecting to WiFi...", WIFI_SSID)
-if not wifi.isconnected():
-    wifi.active(True)
+# MQTT 訊息回調函數
+def mqtt_callback(topic, msg):
+    global power_status
+    print(f'收到訊息 - Topic: {topic.decode()}, Message: {msg.decode()}')
     
-    wifi.connect(WIFI_SSID, WIFI_PASS)
-    while not wifi.isconnected():
-        print(".", end="_")
-        time.sleep(1)
-    
-print('\nWifi connected, IP:', wifi.ifconfig()[0])
-time.sleep(3)
-
-
-
-### https://bhave.sh/micropython-ntp/
-### RTC+NTP
-
-from machine import RTC
-import ntptime
-
-
-try:
-    rtc = RTC()
-    ntptime.settime()    # this queries the time from an NTP server
-    #tm = rtc.datetime() # ( y, m, s, w, h, mi, s, ss)
-    # NTP_DELTA = 8*60*60  # GMT+8
-    tm = time.localtime(time.time() + NTP_DELTA) # (year, month, month-day, hour, min, second, weekday, year-day)
-    print(tm)
-    # showOledMessage("NTP Server", "Ready!")
-except OSError as ex:
-    print(ex)
-    print("Fail to connect with NTP Server?")
-
-time.sleep(3)
-
-
-
-## 定時發布 MQTT 訊息 
-from machine import Timer
-tim1=Timer(1)
-# tim1.init(mode=Timer.PERIODIC, callback=publishMessage)
-tim1.init(period=3000, mode=Timer.PERIODIC, callback=publishMessage)
-
-# define a callback method for MQTT
-def mqtt_callback(topic, payload):
-    # decode from byte-array to be string object
-    topic = topic.decode('utf-8').lower()
-    msg = payload.decode('utf-8')
-    print(f"接收到 mqtt: {msg}")
-
-
-
-while wifi.isconnected():
-    try:
-        # led01.on() # RED ON
-        print("Try to connect with MQTT Broker...")
-        # showOledMessage("Try to connect", "MQTT Broker...", MQTT_BROKER)
-        mqttClient = MQTTClient(client_id=client_id, keepalive=5, server=MQTT_BROKER, port=1883, ssl=False)
-        # mqttClient = MQTTClient(client_id=client_id, server=MQTT_BROKER, user=mqtt_user, password=mqtt_password, ssl=False)
-        mqttClient.connect()
-        
-
-        mqttReady = True
-        print("Connected with MQTT Broker... Ready!")
-
-        # showOledMessage("Connected with MQTT:", MQTT_BROKER)
-        
-        time.sleep(1)
-        # led01.off() # RED OFF
-        
-
-
-        mqttClient.set_callback(mqtt_callback)
-
-        # mqttClient.subscribe(b'pongBot/gpio/#')
-        mqttClient.subscribe(b'pongBot/power')
-        # mqttClient.subscribe(b'pongBot/humi')
-        
-        
-        while True:
-            # check the incoming message --> invoke the callback
-            mqttClient.check_msg()
+    if topic == topic_power:
+        if msg == b'1' or msg.lower() == b'on':
+            power_status = True
+            print('電源開啟')
+            # 在這裡加入開啟發球機的代碼
             
+        elif msg == b'0' or msg.lower() == b'off':
+            power_status = False
+            print('電源關閉')
+            # 在這裡加入關閉發球機的代碼
 
-            time.sleep(0.5)
-        #
+# 連接 MQTT
+def connect_mqtt():
+    print('正在連接 MQTT Broker...')
+    client = MQTTClient(
+        client_id=client_id,
+        server=MQTT_BROKER,
+        user=mqtt_user,
+        password=mqtt_password,
+        keepalive=60
+    )
+    
+    client.set_callback(mqtt_callback)
+    client.connect()
+    client.subscribe(topic_power)
+    
+    print('MQTT 連接成功！')
+    print(f'已訂閱 Topic: {topic_power.decode()}')
+    return client
+
+# 主程式
+def main():
+    # 連接 WiFi
+    wlan = connect_wifi()
+    
+    # 連接 MQTT
+    client = connect_mqtt()
+    
+    print('系統運行中，等待 MQTT 訊息...')
+    print('請在 IoT MQTT Panel 控制 pongBot/power switch')
+    
+    # 主迴圈
+    try:
+        while True:
+            client.check_msg()  # 檢查是否有新訊息
+            time.sleep(0.1)     # 短暫延遲避免過度佔用 CPU
+            
+    except KeyboardInterrupt:
+        print('\n程式中斷')
+        client.disconnect()
     except Exception as e:
-        print("MQTT 錯誤:", e)
-        time.sleep(3)  # 等待後重試
-        
-    finally:
-        if mqttReady:
-            try:
-                mqttClient.disconnect()
-            except:
-                pass
-        mqttReady = False
+        print(f'錯誤: {e}')
+        client.disconnect()
 
-# reboot after 5 seconds.
-# showOledMessage("WiFi is losed!?", "Restart after 5 sec.")
-time.sleep(5)
-machine.reset()
+# 執行主程式
+if __name__ == '__main__':
+    main()
