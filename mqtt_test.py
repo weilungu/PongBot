@@ -151,12 +151,16 @@ while wifi.isconnected():
             time.sleep(0.5)
         #
     except Exception as e:
-        print(e)
+        print("MQTT 錯誤:", e)
+        time.sleep(3)  # 等待後重試
         
     finally:
+        if mqttReady:
+            try:
+                mqttClient.disconnect()
+            except:
+                pass
         mqttReady = False
-        mqttClient.disconnect()
-        pass
 
 # reboot after 5 seconds.
 # showOledMessage("WiFi is losed!?", "Restart after 5 sec.")
