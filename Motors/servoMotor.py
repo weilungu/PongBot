@@ -78,7 +78,7 @@ def main():
         print("無法連接 WiFi，程式結束")
         return
     
-    # 連接 Blynk
+    # 連接 Blynk (使用非 SSL 連接，因為 ESP8266 不支援完整 SSL)
     print("正在連接 Blynk...")
     blynk = BlynkLib.Blynk(BLYNK_AUTH, insecure=True)
     print("Blynk 連接成功!")
@@ -110,8 +110,7 @@ def main():
         if motor_running:
             set_servo_speed(motor_speed)
             print(f"馬達速度已更新為: {motor_speed}%")
-
-
+    
     # 連接事件
     @blynk.on("connected")
     def blynk_connected():
