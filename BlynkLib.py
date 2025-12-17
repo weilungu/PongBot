@@ -262,4 +262,3 @@ class Blynk(BlynkProtocol):
         except: # TODO: handle disconnect
             return
         self.process(data)
-
