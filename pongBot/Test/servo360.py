@@ -68,20 +68,31 @@ def connect_wifi():
     
     return True
 
+def connect_blynk():
+    """連接 Blynk 伺服器，失敗時持續重試"""
+    while True:
+        try:
+            print("正在連接 Blynk...")
+            blynk = BlynkLib.Blynk(BLYNK_AUTH, insecure=True)
+            print("Blynk 連接成功!")
+            return blynk
+        except Exception as e:
+            print(f"Blynk 連接失敗: {e}")
+            print("5 秒後重試...")
+            time.sleep(5)
+
 def main():
     """主程式"""
     # 初始化：馬達停止
     set_servo_speed(0)
     
-    # 連接 WiFi
-    if not connect_wifi():
-        print("無法連接 WiFi，程式結束")
-        return
+    # 連接 WiFi（持續重試直到成功）
+    while not connect_wifi():
+        print("WiFi 連接失敗，5 秒後重試...")
+        time.sleep(5)
     
     # 連接 Blynk (使用非 SSL 連接，因為 ESP8266 不支援完整 SSL)
-    print("正在連接 Blynk...")
-    blynk = BlynkLib.Blynk(BLYNK_AUTH, insecure=True)
-    print("Blynk 連接成功!")
+    blynk = connect_blynk()
     
     # ==================== Blynk 虛擬腳位處理 ====================
     
@@ -125,8 +136,13 @@ def main():
     print("開始執行主迴圈...")
     print("等待 Blynk 指令...")
     while True:
-        blynk.run()
-        time.sleep(0.1)
+        try:
+            blynk.run()
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"Blynk 運行錯誤: {e}")
+            print("嘗試重新連接...")
+            blynk = connect_blynk()
 
 # 執行主程式
 if __name__ == "__main__":
