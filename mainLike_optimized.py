@@ -122,9 +122,16 @@ def proc_btn(bp,gp,lp,ip,ps,it,te):
                 blynk.virtual_write(lp,"True")
             if mqtt:
                 try:
-                    mqtt.publish(b"pongBot/supply/speed",str(ss).encode())
-                    mqtt.publish(b"pongBot/serve/up",str(dm.ma.s).encode())
-                    mqtt.publish(b"pongBot/serve/down",str(dm.mb.s).encode())
+                    v1_level=0
+                    for i in range(1,6):
+                        if SERVO_MAP[i]==ss:
+                            v1_level=i
+                            break
+                    v3_panel=int(dm.ma.s*2)
+                    v4_panel=int(dm.mb.s*2)
+                    mqtt.publish(b"pongBot/servo/level",str(v1_level).encode())
+                    mqtt.publish(b"pongBot/motor/top",str(v3_panel).encode())
+                    mqtt.publish(b"pongBot/motor/bottom",str(v4_panel).encode())
                 except:
                     pass
             it=True

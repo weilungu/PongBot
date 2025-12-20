@@ -24,7 +24,7 @@ BLYNK_AUTH = "O-npu_Lj5Kh2v_oyBF67kAcskwlxuKx6"
 BALL_MACHINE_PIN = 5  # GPIO5
 
 # DC 馬達設定 (TB6612FNG)
-MOTOR_A_IN1 = 5     # GPIO5 - AIN1  (D1)
+MOTOR_A_IN1 = 5     # GPIO5 - AIN1  (D1)    
 MOTOR_A_IN2 = 4     # GPIO4 - AIN2  (D2)
 MOTOR_A_PWM = 14    # GPIO14 - PWMA (D5)
 MOTOR_B_IN1 = 12    # GPIO12 - BIN1 (D6)
