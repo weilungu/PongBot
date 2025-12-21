@@ -5,11 +5,7 @@ import gc
 
 gc.collect()
 
-WIFI = [{"ssid": "shepherd", "password": "Good@11255"},
-        {"ssid": "aron", "password": "00000000"},]
-
-# SSID="aron"
-# PASS="00000000"
+WIFI=[{"ssid":"shepherd","password":"Good@11255"},{"ssid":"aron","password":"00000000"}]
 AUTH="O-npu_Lj5Kh2v_oyBF67kAcskwlxuKx6"
 MQTT_BROKER="broker.hivemq.com"
 MQTT_CLIENT="pongBot"
@@ -81,53 +77,30 @@ def set_servo(s):
 
 def mqtt_callback(topic,msg):
     global blynk,ss,sr
-    print("MQTT recv:",topic)
     if topic==b"pongBot/save/successful" and blynk:
         payload=msg.decode().strip()
-        if payload=="TRUE":
-            blynk.virtual_write(14,"True")
-        else:
-            blynk.virtual_write(14,"False")
+        blynk.virtual_write(14,"True" if payload=="TRUE" else "False")
     elif topic==b"pongBot/importing/successful" and blynk:
         payload=msg.decode().strip()
-        if payload=="T":
-            blynk.virtual_write(15,"True")
-        else:
-            blynk.virtual_write(15,"False")
+        blynk.virtual_write(15,"True" if payload=="T" else "False")
     elif topic==b"pongBot/importing/data" and blynk:
-        print("Recv import data")
         try:
-            payload=msg.decode().strip()
-            print("Data:",payload)
-            data_dict={}
-            payload=payload.strip('"')
-            pairs=payload.strip('{}').split(',')
-            for pair in pairs:
+            payload=msg.decode().strip().strip('"').strip('{}')
+            for pair in payload.split(','):
                 if ':' in pair:
-                    key,val=pair.split(':',1)
-                    key=key.strip().strip('"')
-                    val=val.strip().strip('"')
-                    data_dict[key]=int(val)
-            if 'servo_level' in data_dict:
-                v1_val=data_dict['servo_level']
-                if 1<=v1_val<=5:
-                    ss=SERVO_MAP[v1_val]
-                    blynk.virtual_write(1,v1_val)
-                    if sr:
-                        set_servo(ss)
-            if 'motor_top' in data_dict:
-                v3_val=data_dict['motor_top']
-                if 1<=v3_val<=100:
-                    dm.ma.set_speed(v3_val*0.5)
-                    blynk.virtual_write(3,v3_val)
-            if 'motor_bottom' in data_dict:
-                v4_val=data_dict['motor_bottom']
-                if 1<=v4_val<=100:
-                    dm.mb.set_speed(v4_val*0.5)
-                    blynk.virtual_write(4,v4_val)
-            print("Import done")
-        except Exception as e:
-            print("Import err:",e)
+                    k,v=pair.split(':',1)
+                    k,v=k.strip().strip('"'),int(v.strip().strip('"'))
+                    if k=='servo_level' and 1<=v<=5:
+                        ss=SERVO_MAP[v]
+                        blynk.virtual_write(1,v)
+                        if sr:set_servo(ss)
+                    elif k=='motor_top' and 1<=v<=100:
+                        dm.ma.set_speed(v*0.5)
+                        blynk.virtual_write(3,v)
+                    elif k=='motor_bottom' and 1<=v<=100:
+                        dm.mb.set_speed(v*0.5)
+                        blynk.virtual_write(4,v)
+        except:pass
 
 def conn_mqtt():
     global mqtt
@@ -138,35 +111,26 @@ def conn_mqtt():
         mqtt.subscribe(b"pongBot/save/successful")
         mqtt.subscribe(b"pongBot/importing/data")
         mqtt.subscribe(b"pongBot/importing/successful")
-        print("MQTT OK")
         return True
-    except:
-        print("MQTT Fail")
-        return False
+    except:return False
 
 def conn_wifi():
     w=network.WLAN(network.STA_IF)
     w.active(True)
     if not w.isconnected():
         for wifi in WIFI:
-            print(f"WiFi...{wifi['ssid']}")
             w.connect(wifi['ssid'],wifi['password'])
             t=20
             while not w.isconnected() and t>0:
                 time.sleep(1)
                 t-=1
-            if w.isconnected():
-                print(f"WiFi OK: {wifi['ssid']}")
-                return True
-            print(f"Fail: {wifi['ssid']}")
+            if w.isconnected():return True
         return False
     return True
 
 def get_ms():
-    try:
-        return time.ticks_ms()
-    except:
-        return int(time.time()*1000)
+    try:return time.ticks_ms()
+    except:return int(time.time()*1000)
 
 def proc_btn(bp,gp,lp,ip,ps,it,te):
     now=get_ms()
@@ -192,11 +156,8 @@ def proc_btn(bp,gp,lp,ip,ps,it,te):
                         mqtt.publish(b"pongBot/motor/top",str(v3_panel).encode())
                         mqtt.publish(b"pongBot/motor/bottom",str(v4_panel).encode())
                     elif bp==12:
-                        print("V12 MQTT pub")
                         mqtt.publish(b"pongBot/importing",b"AAA")
-                        print("V12 sent AAA")
-                except Exception as e:
-                    print("V12 err:",e)
+                except:pass
             it=True
             te=now
     if it and te and now-te>=HOLD_T:
@@ -273,18 +234,16 @@ def setup():
             if not ip10:
                 ip10=True
                 ps10=get_ms()
-                if blynk:
-                    blynk.virtual_write(11,0)
-                    blynk.virtual_write(10,0)
+                blynk.virtual_write(11,0)
+                blynk.virtual_write(10,0)
         else:
             if ip10 and not it10:
                 ip10=False
                 ps10=None
-                if blynk:blynk.virtual_write(11,0)
+                blynk.virtual_write(11,0)
             elif it10:
                 ip10=False
-                if blynk:blynk.virtual_write(10,1)
-    
+                blynk.virtual_write(10,1)
     @blynk.on("V12")
     def v12(v):
         global ip12,ps12,it12
@@ -292,22 +251,20 @@ def setup():
             if not ip12:
                 ip12=True
                 ps12=get_ms()
-                if blynk:
-                    blynk.virtual_write(13,0)
-                    blynk.virtual_write(12,0)
+                blynk.virtual_write(13,0)
+                blynk.virtual_write(12,0)
         else:
             if ip12 and not it12:
                 ip12=False
                 ps12=None
-                if blynk:blynk.virtual_write(13,0)
+                blynk.virtual_write(13,0)
             elif it12:
                 ip12=False
-                if blynk:blynk.virtual_write(12,1)
+                blynk.virtual_write(12,1)
     
     @blynk.on("connected")
     def conn():
         global ss
-        print("Blynk OK")
         blynk.virtual_write(0,0)
         blynk.virtual_write(1,1)
         ss=SERVO_MAP[1]
@@ -316,52 +273,36 @@ def setup():
         dm.ma.set_speed(0.5)
         blynk.virtual_write(4,1)
         dm.mb.set_speed(0.5)
-        for p in [10,11,12,13]:
-            blynk.virtual_write(p,0)
+        for p in [10,11,12,13]:blynk.virtual_write(p,0)
         blynk.virtual_write(14,"False")
         blynk.virtual_write(15,"False")
-    
     @blynk.on("disconnected")
-    def disc():
-        print("Lost")
-
+    def disc():pass
 def main():
     global blynk,dm
-    print("Start")
-    while not conn_wifi():
-        time.sleep(5)
+    while not conn_wifi():time.sleep(5)
     dm=DualMotor(MA1,MA2,MAPWM,MB1,MB2,MBPWM)
     init_servo()
     conn_mqtt()
     gc.collect()
-    print("Blynk...")
-    try:
-        blynk=BlynkLib.Blynk(AUTH,insecure=True)
-    except Exception as e:
-        print(e)
-        return
+    try:blynk=BlynkLib.Blynk(AUTH,insecure=True)
+    except:return
     setup()
-    print("Ready")
     try:
         while True:
             blynk.run()
             if mqtt:
-                try:
-                    mqtt.check_msg()
-                except:
-                    pass
+                try:mqtt.check_msg()
+                except:pass
             proc_all()
             time.sleep(0.01)
-    except:
-        pass
+    except:pass
     finally:
         dm.stop()
         set_servo(0)
         if mqtt:
-            try:
-                mqtt.disconnect()
-            except:
-                pass
+            try:mqtt.disconnect()
+            except:pass
 
 if __name__=="__main__":
     main()
