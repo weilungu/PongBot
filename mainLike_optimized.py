@@ -5,8 +5,8 @@ import gc
 
 gc.collect()
 
-WIFI = [{"ssid": "aron", "password": "00000000"},
-        {"ssid": "shepherd", "password": "Good@11255"}]
+WIFI = [{"ssid": "shepherd", "password": "Good@11255"},
+        {"ssid": "aron", "password": "00000000"},]
 
 # SSID="aron"
 # PASS="00000000"
@@ -79,11 +79,65 @@ def init_servo():
 def set_servo(s):
     sp.duty(int((1.5+(-s/100))*51.2))
 
+def mqtt_callback(topic,msg):
+    global blynk,ss,sr
+    print("MQTT recv:",topic)
+    if topic==b"pongBot/save/successful" and blynk:
+        payload=msg.decode().strip()
+        if payload=="TRUE":
+            blynk.virtual_write(14,"True")
+        else:
+            blynk.virtual_write(14,"False")
+    elif topic==b"pongBot/importing/successful" and blynk:
+        payload=msg.decode().strip()
+        if payload=="T":
+            blynk.virtual_write(15,"True")
+        else:
+            blynk.virtual_write(15,"False")
+    elif topic==b"pongBot/importing/data" and blynk:
+        print("Recv import data")
+        try:
+            payload=msg.decode().strip()
+            print("Data:",payload)
+            data_dict={}
+            payload=payload.strip('"')
+            pairs=payload.strip('{}').split(',')
+            for pair in pairs:
+                if ':' in pair:
+                    key,val=pair.split(':',1)
+                    key=key.strip().strip('"')
+                    val=val.strip().strip('"')
+                    data_dict[key]=int(val)
+            if 'servo_level' in data_dict:
+                v1_val=data_dict['servo_level']
+                if 1<=v1_val<=5:
+                    ss=SERVO_MAP[v1_val]
+                    blynk.virtual_write(1,v1_val)
+                    if sr:
+                        set_servo(ss)
+            if 'motor_top' in data_dict:
+                v3_val=data_dict['motor_top']
+                if 1<=v3_val<=100:
+                    dm.ma.set_speed(v3_val*0.5)
+                    blynk.virtual_write(3,v3_val)
+            if 'motor_bottom' in data_dict:
+                v4_val=data_dict['motor_bottom']
+                if 1<=v4_val<=100:
+                    dm.mb.set_speed(v4_val*0.5)
+                    blynk.virtual_write(4,v4_val)
+            print("Import done")
+        except Exception as e:
+            print("Import err:",e)
+
 def conn_mqtt():
     global mqtt
     try:
         mqtt=MQTTClient(MQTT_CLIENT,MQTT_BROKER)
+        mqtt.set_callback(mqtt_callback)
         mqtt.connect()
+        mqtt.subscribe(b"pongBot/save/successful")
+        mqtt.subscribe(b"pongBot/importing/data")
+        mqtt.subscribe(b"pongBot/importing/successful")
         print("MQTT OK")
         return True
     except:
@@ -124,21 +178,25 @@ def proc_btn(bp,gp,lp,ip,ps,it,te):
             Pin(BALL_PIN,Pin.OUT).on()
             if blynk:
                 blynk.virtual_write(bp,1)
-                blynk.virtual_write(lp,"True")
             if mqtt:
                 try:
-                    v1_level=0
-                    for i in range(1,6):
-                        if SERVO_MAP[i]==ss:
-                            v1_level=i
-                            break
-                    v3_panel=int(dm.ma.s*2)
-                    v4_panel=int(dm.mb.s*2)
-                    mqtt.publish(b"pongBot/servo/level",str(v1_level).encode())
-                    mqtt.publish(b"pongBot/motor/top",str(v3_panel).encode())
-                    mqtt.publish(b"pongBot/motor/bottom",str(v4_panel).encode())
-                except:
-                    pass
+                    if bp==10:
+                        v1_level=0
+                        for i in range(1,6):
+                            if SERVO_MAP[i]==ss:
+                                v1_level=i
+                                break
+                        v3_panel=int(dm.ma.s*2)
+                        v4_panel=int(dm.mb.s*2)
+                        mqtt.publish(b"pongBot/servo/level",str(v1_level).encode())
+                        mqtt.publish(b"pongBot/motor/top",str(v3_panel).encode())
+                        mqtt.publish(b"pongBot/motor/bottom",str(v4_panel).encode())
+                    elif bp==12:
+                        print("V12 MQTT pub")
+                        mqtt.publish(b"pongBot/importing",b"AAA")
+                        print("V12 sent AAA")
+                except Exception as e:
+                    print("V12 err:",e)
             it=True
             te=now
     if it and te and now-te>=HOLD_T:
@@ -248,8 +306,17 @@ def setup():
     
     @blynk.on("connected")
     def conn():
+        global ss
         print("Blynk OK")
-        for p in [0,1,2,3,4,10,11,12,13]:
+        blynk.virtual_write(0,0)
+        blynk.virtual_write(1,1)
+        ss=SERVO_MAP[1]
+        blynk.virtual_write(2,0)
+        blynk.virtual_write(3,1)
+        dm.ma.set_speed(0.5)
+        blynk.virtual_write(4,1)
+        dm.mb.set_speed(0.5)
+        for p in [10,11,12,13]:
             blynk.virtual_write(p,0)
         blynk.virtual_write(14,"False")
         blynk.virtual_write(15,"False")
@@ -278,6 +345,11 @@ def main():
     try:
         while True:
             blynk.run()
+            if mqtt:
+                try:
+                    mqtt.check_msg()
+                except:
+                    pass
             proc_all()
             time.sleep(0.01)
     except:
