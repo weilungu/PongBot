@@ -5,8 +5,11 @@ import gc
 
 gc.collect()
 
-SSID="aron"
-PASS="00000000"
+WIFI = [{"ssid": "aron", "password": "00000000"},
+        {"ssid": "shepherd", "password": "Good@11255"}]
+
+# SSID="aron"
+# PASS="00000000"
 AUTH="O-npu_Lj5Kh2v_oyBF67kAcskwlxuKx6"
 MQTT_BROKER="broker.hivemq.com"
 MQTT_CLIENT="pongBot"
@@ -91,15 +94,17 @@ def conn_wifi():
     w=network.WLAN(network.STA_IF)
     w.active(True)
     if not w.isconnected():
-        print("WiFi...")
-        w.connect(SSID,PASS)
-        t=20
-        while not w.isconnected() and t>0:
-            time.sleep(1)
-            t-=1
-        if w.isconnected():
-            print("WiFi OK")
-            return True
+        for wifi in WIFI:
+            print(f"WiFi...{wifi['ssid']}")
+            w.connect(wifi['ssid'],wifi['password'])
+            t=20
+            while not w.isconnected() and t>0:
+                time.sleep(1)
+                t-=1
+            if w.isconnected():
+                print(f"WiFi OK: {wifi['ssid']}")
+                return True
+            print(f"Fail: {wifi['ssid']}")
         return False
     return True
 
